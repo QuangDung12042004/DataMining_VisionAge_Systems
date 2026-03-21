@@ -1,0 +1,19 @@
+# Python rác
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Môi trường ảo (Rất nặng, không bao giờ đưa lên Git)
+venv/
+env/
+
+dataset/raw/
+dataset/processed/
+
+# MÔ HÌNH (Model nặng)
+*.h5
+*.keras
+
+# File cấu hình cá nhân
+.vscode/
+.idea/
