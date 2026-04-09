@@ -1,13 +1,55 @@
 import os
-import time
-import requests
-from io import BytesIO
+import shutil
+from datetime import datetime
 from PIL import Image
-from duckduckgo_search import DDGS
+from bing_image_downloader import downloader
+from minio import Minio
+from pymongo import MongoClient
+from dotenv import load_dotenv
 
 # Cấu hình dự án
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "dataset", "raw")
+
+# Load biến môi trường từ file .env (nếu có)
+load_dotenv()
+
+# Cấu hình MinIO
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+MINIO_BUCKET = os.getenv("MINIO_BUCKET", "visionage-dataset")
+MINIO_SECURE = os.getenv("MINIO_SECURE", "False").lower() in ("true", "1", "yes")
+
+# Khởi tạo client MinIO
+try:
+    minio_client = Minio(
+        MINIO_ENDPOINT,
+        access_key=MINIO_ACCESS_KEY,
+        secret_key=MINIO_SECRET_KEY,
+        secure=MINIO_SECURE
+    )
+    # Kiểm tra bucket và tạo nếu chưa có
+    if not minio_client.bucket_exists(MINIO_BUCKET):
+        minio_client.make_bucket(MINIO_BUCKET)
+    USE_MINIO = True
+    print(f"Đã cấu hình MinIO. Ảnh sẽ được tự động lưu lên bucket: '{MINIO_BUCKET}'")
+except Exception as e:
+    USE_MINIO = False
+    print(f"Lỗi khởi tạo MinIO, hệ thống sẽ chỉ lưu nội bộ trên máy. Lỗi: {e}")
+
+# Cấu hình MongoDB
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:adminpassword@localhost:27017/")
+try:
+    mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    mongo_client.admin.command('ping') # Kiểm tra kết nối
+    mongo_db = mongo_client["visionage_db"]
+    images_collection = mongo_db["images"]
+    USE_MONGO = True
+    print("Đã cấu hình kết nối MongoDB thành công.")
+except Exception as e:
+    USE_MONGO = False
+    print(f"Lỗi khởi tạo MongoDB, metadata sẽ không được lưu. Lỗi: {e}")
 
 # Định nghĩa các nhóm tuổi và từ khóa tìm kiếm tiếng Anh để có kết quả tốt nhất
 AGE_GROUPS = {
@@ -17,7 +59,7 @@ AGE_GROUPS = {
     "elderly": ["very old face portrait", "wrinkled face elderly", "senior citizen face"]
 }
 # Tăng số lượng lên để AI thông minh hơn
-IMAGES_PER_GROUP = 100  # Số lượng ảnh cần tải cho mỗi nhóm
+IMAGES_PER_GROUP = 50  # Hạ xuống 50 để tải nhanh hơn cho mạng của bạn
 
 def create_directories():
     """Tạo cấu trúc thư mục chứa dữ liệu"""
@@ -29,90 +71,116 @@ def create_directories():
         if not os.path.exists(group_dir):
             os.makedirs(group_dir)
 
-def download_image(url, save_path):
-    """Tải một hình ảnh từ URL và lưu vào đĩa"""
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        # Tắt verify SSL tạm thời nếu gặp lỗi certificate của một số trang web
-        response = requests.get(url, headers=headers, timeout=10, verify=False)
-        response.raise_for_status()
-        
-        img = Image.open(BytesIO(response.content))
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        img.save(save_path)
-        return True
-    except Exception as e:
-        print(f"Lỗi khi tải {url[:50]}...: {e}")
-        return False
-
 def collect_data():
-    """Hàm chính để thu thập hình ảnh theo từ khóa"""
+    """Hàm chính để thu thập hình ảnh theo từ khóa dùng Bing"""
     create_directories()
     
-    # Ẩn cảnh báo InsecureRequestWarning khi verify=False
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    
-    print("Khởi tạo tìm kiếm DuckDuckGo...")
+    print("Khởi tạo tìm kiếm Bing Image Downloader...")
     for group, keywords in AGE_GROUPS.items():
         print(f"\n[{group.upper()}] Bắt đầu thu thập dữ liệu...")
         group_dir = os.path.join(DATA_DIR, group)
-        downloaded = len([f for f in os.listdir(group_dir) if f.endswith('.jpg')]) if os.path.exists(group_dir) else 0
+        
+        downloaded = len([f for f in os.listdir(group_dir) if f.endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(group_dir) else 0
         
         for keyword in keywords:
             if downloaded >= IMAGES_PER_GROUP:
                 break
                 
             print(f"  Tìm kiếm từ khóa: '{keyword}'")
-            
             try:
-                # Khởi tạo DDGS mới mỗi lần tìm kiếm để hạn chế Rate Limit
-                with DDGS() as ddgs:
-                    results = ddgs.images(
-                        keywords=keyword,
-                        region="wt-wt",
-                        safesearch="moderate",
-                        size="Medium",
-                        type_image="photo",
-                        max_results=IMAGES_PER_GROUP
-                    )
-                    
-                    found_any = False
-                    for result in results:
-                        found_any = True
+                # Tải ảnh qua bing
+                downloader.download(
+                    keyword, 
+                    limit=IMAGES_PER_GROUP - downloaded, 
+                    output_dir=group_dir, 
+                    adult_filter_off=False, 
+                    force_replace=False, 
+                    timeout=20, # Giảm timeout xuống để nếu lỗi nhảy luôn sang ảnh khác
+                    verbose=True # Hiện chi tiết để bạn thấy nó đang tiếp tục
+                )
+                
+                # Di chuyển và đổi tên các ảnh ra ngoài thư mục group
+                kw_dir = os.path.join(group_dir, keyword)
+                if os.path.exists(kw_dir):
+                    for filename in os.listdir(kw_dir):
                         if downloaded >= IMAGES_PER_GROUP:
                             break
+                        
+                        src = os.path.join(kw_dir, filename)
+                        
+                        if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            new_name = f"{group}_{downloaded+1:03d}.jpg"
+                            dst = os.path.join(group_dir, new_name)
                             
-                        image_url = result.get("image")
-                        if not image_url:
-                            continue
+                            try:
+                                img = Image.open(src)
+                                if img.mode != 'RGB':
+                                    img = img.convert('RGB')
+                                img.save(dst, "JPEG")
+                                
+                                # Lấy thông tin dung lượng và độ phân giải
+                                try:
+                                    file_size_kb = round(os.path.getsize(dst) / 1024, 2)
+                                    width, height = img.size
+                                    resolution = f"{width}x{height}"
+                                except Exception:
+                                    file_size_kb = 0
+                                    resolution = "unknown"
+
+                                minio_path = ""
+                                upload_status = "local_only"
+
+                                # Tải ảnh lên MinIO sau khi lưu xong trên máy
+                                if USE_MINIO:
+                                    object_name = f"raw/{group}/{new_name}"
+                                    try:
+                                        minio_client.fput_object(
+                                            MINIO_BUCKET, 
+                                            object_name, 
+                                            dst,
+                                            content_type="image/jpeg"
+                                        )
+                                        minio_path = object_name
+                                        upload_status = "success"
+                                    except Exception as e:
+                                        print(f"    [!] Lỗi upload MinIO với {new_name}: {e}")
+                                        upload_status = "minio_error"
+
+                                # Lưu metadata vào MongoDB
+                                if USE_MONGO:
+                                    metadata = {
+                                        "filename": new_name,
+                                        "age_group": group,
+                                        "search_keyword": keyword,
+                                        "source": "bing_image_downloader",
+                                        "minio_path": minio_path,
+                                        "upload_status": upload_status,
+                                        "file_size_kb": file_size_kb,
+                                        "resolution": resolution,
+                                        "image_format": img.format if img.format else "JPEG",
+                                        "created_at": datetime.now()
+                                    }
+                                    try:
+                                        images_collection.insert_one(metadata)
+                                    except Exception as e:
+                                        print(f"    [!] Lỗi lưu metadata vào MongoDB: {e}")
+
+                                downloaded += 1
+                            except Exception as e:
+                                pass
+                                
+                        try:
+                            os.remove(src)
+                        except:
+                            pass
                             
-                        file_name = f"{group}_{downloaded+1:03d}.jpg"
-                        save_path = os.path.join(group_dir, file_name)
-                        
-                        if os.path.exists(save_path):
-                            continue
-                            
-                        print(f"    Tải {file_name} từ {image_url[:50]}...")
-                        success = download_image(image_url, save_path)
-                        
-                        if success:
-                            downloaded += 1
-                        
-                        time.sleep(0.5)
-                        
-                    if not found_any:
-                        print(f"    [!] Không tìm thấy ảnh (có thể do Rate Limit ẩn từ DuckDuckGo). Đang chờ 15 giây...")
-                        time.sleep(15)
+                    try:
+                        shutil.rmtree(kw_dir)
+                    except:
+                        pass
                         
             except Exception as e:
-                print(f"Lỗi truy vấn với {keyword}: {e}")
-                print("Đang bị Rate Limit, tạm thời chờ 15 giây trước khi tiếp tục...")
-                time.sleep(15)
+                print(f"    [!] Lỗi truy vấn với {keyword}: {e}")
                 
         print(f"[{group.upper()}] Đã tải xong {downloaded}/{IMAGES_PER_GROUP} ảnh.")
 

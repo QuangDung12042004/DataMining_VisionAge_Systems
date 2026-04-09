@@ -17,3 +17,6 @@ dataset/processed/
 # File cấu hình cá nhân
 .vscode/
 .idea/
+
+# THƯ MỤC DATABASE & MINIO (RẤT NẶNG, BẢO MẬT)
+docker_data/

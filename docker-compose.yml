@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # Dịch vụ MinIO (Lưu trữ ảnh, object storage)
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000" # Cổng API của MinIO
+      - "9001:9001" # Cổng giao diện Web (Console)
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./docker_data/minio:/data
+    restart: unless-stopped
+
+  # Dịch vụ Cơ sở dữ liệu (MongoDB)
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017" # Cổng kết nối MongoDB
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: adminpassword
+      MONGO_INITDB_DATABASE: visionage_db
+    volumes:
+      - ./docker_data/mongodb:/data/db
+    restart: unless-stopped

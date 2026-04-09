@@ -1,7 +1,11 @@
 tensorflow
 opencv-python
-duckduckgo-search>=6.0.0
+icrawler
 streamlit
 pillow
 numpy
 matplotlib
+pymongo
+minio
+python-dotenv
+bing-image-downloader
