@@ -1,0 +1,6 @@
+{
+  "adult": 0,
+  "child": 1,
+  "elderly": 2,
+  "teen": 3
+}

@@ -5,6 +5,9 @@ import numpy as np
 import cv2
 import os
 import pandas as pd
+import json
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as mobilenet_preprocess_input
+from tensorflow.keras.applications.efficientnet import preprocess_input as efficientnet_preprocess_input
 
 st.set_page_config(page_title="Age Classification AI", page_icon="👤", layout="centered")
 
@@ -29,9 +32,36 @@ st.markdown("""
 
 # --- CẤU HÌNH ĐƯỜNG DẪN ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "age_classifier_model.h5")
+MODEL_PATH = os.path.join(BASE_DIR, "age_classifier_model.keras")
+CLASS_MAP_PATH = os.path.join(BASE_DIR, "age_class_indices.json")
+BACKBONE = "efficientnetb0"  # Đồng bộ với train_model.py
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-CLASS_NAMES = {0: 'Adult (Trưởng thành)', 1: 'Child (Trẻ em)', 2: 'Elderly (Người già)', 3: 'Teen (Thiếu niên)'}
+
+DISPLAY_NAME_MAP = {
+    "adult": "Adult (Trưởng thành)",
+    "child": "Child (Trẻ em)",
+    "elderly": "Elderly (Người già)",
+    "teen": "Teen (Thiếu niên)",
+    "young_adults": "Young Adults (Thanh niên)"
+}
+
+def get_preprocess_fn(backbone_name):
+    name = backbone_name.lower()
+    if name == "mobilenetv2":
+        return mobilenet_preprocess_input
+    if name == "efficientnetb0":
+        return efficientnet_preprocess_input
+    raise ValueError(f"BACKBONE không hợp lệ: {backbone_name}")
+
+def load_class_names():
+    if os.path.exists(CLASS_MAP_PATH):
+        with open(CLASS_MAP_PATH, "r", encoding="utf-8") as f:
+            class_to_idx = json.load(f)
+        idx_to_class = {int(v): k for k, v in class_to_idx.items()}
+        max_idx = max(idx_to_class.keys())
+        return [idx_to_class[i] for i in range(max_idx + 1)]
+    # Fallback để app vẫn chạy nếu chưa có class map mới
+    return ["adult", "child", "elderly", "teen", "young_adults"]
 
 @st.cache_resource
 def load_classifier():
@@ -40,6 +70,9 @@ def load_classifier():
         return tf.keras.models.load_model(MODEL_PATH)
     return None
 
+class_names = load_class_names()
+display_class_names = [DISPLAY_NAME_MAP.get(name, name) for name in class_names]
+preprocess_fn = get_preprocess_fn(BACKBONE)
 model = load_classifier()
 
 st.markdown("<h1>Age Classification Vision AI</h1>", unsafe_allow_html=True)
@@ -83,15 +116,20 @@ else:
                 st.image(face_img, caption="👤 Khuôn mặt phân tích", use_container_width=True)
                 
                 # Dự đoán
-                input_arr = np.expand_dims(face_resized, axis=0) / 255.0
+                input_arr = np.expand_dims(face_resized.astype(np.float32), axis=0)
+                input_arr = preprocess_fn(input_arr)
                 predictions = model.predict(input_arr)[0]
                 predicted_class = np.argmax(predictions)
                 confidence = predictions[predicted_class] * 100
 
+                if predicted_class >= len(display_class_names):
+                    st.error("⚠️ Số lớp của model không khớp class map. Hãy train lại để đồng bộ.")
+                    st.stop()
+
                 # Hiển thị kết quả chính
                 st.markdown(f"""
                 <div class="result-box">
-                    <div class="result-label">{CLASS_NAMES[predicted_class]}</div>
+                    <div class="result-label">{display_class_names[predicted_class]}</div>
                     <div style="color:#8b949e">Độ tin cậy: {confidence:.2f}%</div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -99,5 +137,5 @@ else:
                 # Hiển thị biểu đồ xác suất các nhóm khác
                 st.write("---")
                 st.write("📊 Chi tiết phân tích:")
-                chart_data = pd.DataFrame(predictions, index=CLASS_NAMES.values(), columns=["Xác suất"])
+                chart_data = pd.DataFrame(predictions[:len(display_class_names)], index=display_class_names, columns=["Xác suất"])
                 st.bar_chart(chart_data)

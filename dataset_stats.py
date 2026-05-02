@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 
 # Cấu hình đường dẫn
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-RAW_DIR = os.path.join(BASE_DIR, "dataset", "raw")
-PROCESSED_DIR = os.path.join(BASE_DIR, "dataset", "processed")
+RAW_DIR = os.path.join(BASE_DIR, "raw_images")
+PROCESSED_DIR = os.path.join(BASE_DIR, "cleaned_dataset_v2")
 
 def count_images(directory):
     counts = {}

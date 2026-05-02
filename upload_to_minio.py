@@ -74,7 +74,7 @@ def sync_dataset_to_minio_and_mongo():
                         MINIO_BUCKET, 
                         object_name, 
                         file_path,
-                        content_type="image/jpeg"
+                        content_type="image/png"
                     )
                     count += 1
                     upload_status = "success"

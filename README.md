@@ -73,4 +73,3 @@ python dataset_stats.py
 - `docker_data/`: Thư mục lưu trữ database thực tế tạo bởi Docker.
 - `dataset/`: Thư mục chứa dữ liệu ảnh.
 - `requirements.txt`: Danh sách các package Python.
-

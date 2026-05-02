@@ -109,14 +109,14 @@ def collect_data():
                         src = os.path.join(kw_dir, filename)
                         
                         if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                            new_name = f"{group}_{downloaded+1:03d}.jpg"
+                            new_name = f"{group}_{downloaded+1:03d}.png"
                             dst = os.path.join(group_dir, new_name)
                             
                             try:
                                 img = Image.open(src)
                                 if img.mode != 'RGB':
                                     img = img.convert('RGB')
-                                img.save(dst, "JPEG")
+                                img.save(dst, "PNG")
                                 
                                 # Lấy thông tin dung lượng và độ phân giải
                                 try:
@@ -138,7 +138,7 @@ def collect_data():
                                             MINIO_BUCKET, 
                                             object_name, 
                                             dst,
-                                            content_type="image/jpeg"
+                                            content_type="image/png"
                                         )
                                         minio_path = object_name
                                         upload_status = "success"

@@ -1,0 +1,5 @@
+Split,Ratio,Images
+Train,70%,"10,346"
+Validation,15%,"2,217"
+Test,15%,"2,217"
+Total,100%,"14,780"

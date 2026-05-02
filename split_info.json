@@ -1,0 +1,27 @@
+{
+  "ratios": {
+    "train": 0.7,
+    "validation": 0.15,
+    "test": 0.15
+  },
+  "counts": {
+    "train": {
+      "adult": 1621,
+      "child": 1578,
+      "elderly": 1871,
+      "teen": 1062
+    },
+    "validation": {
+      "adult": 347,
+      "child": 338,
+      "elderly": 401,
+      "teen": 228
+    },
+    "test": {
+      "adult": 348,
+      "child": 338,
+      "elderly": 401,
+      "teen": 228
+    }
+  }
+}

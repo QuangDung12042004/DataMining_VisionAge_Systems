@@ -9,3 +9,6 @@ pymongo
 minio
 python-dotenv
 bing-image-downloader
+scikit-learn
+mediapipe
+ImageHash

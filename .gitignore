@@ -6,6 +6,7 @@ __pycache__/
 # Môi trường ảo (Rất nặng, không bao giờ đưa lên Git)
 venv/
 env/
+.venv/
 
 dataset/raw/
 dataset/processed/
@@ -20,3 +21,6 @@ dataset/processed/
 
 # THƯ MỤC DATABASE & MINIO (RẤT NẶNG, BẢO MẬT)
 docker_data/
+dataset/
+*.rar
+*.zip
