@@ -12,8 +12,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RAW_DIR = os.path.join(BASE_DIR, "raw")
 INTERMEDIATE_DIR = os.path.join(BASE_DIR, "dataset", "intermediate")
 
-TARGET_SIZE = (200, 200)
-VALID_EXT = (".png", )
+TARGET_SIZE = (224, 224)
+VALID_EXT = (".jpg", ".jpeg", ".png")
 
 # =========================================
 
