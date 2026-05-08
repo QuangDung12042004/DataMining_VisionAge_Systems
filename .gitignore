@@ -8,12 +8,14 @@ venv/
 env/
 .venv/
 
-dataset/raw/
-dataset/processed/
+dataset/
+temp_downloads/
 
 # MÔ HÌNH (Model nặng)
 *.h5
-*.keras
+# Bỏ comment *.keras dưới đây nếu không muốn đưa model lên Git. 
+# Nhưng vì ta cần app chạy được ngay nên sẽ cho phép push file age_classifier_model.keras
+# *.keras
 
 # File cấu hình cá nhân
 .vscode/
@@ -21,6 +23,8 @@ dataset/processed/
 
 # THƯ MỤC DATABASE & MINIO (RẤT NẶNG, BẢO MẬT)
 docker_data/
-dataset/
 *.rar
 *.zip
+
+# Bỏ qua các ảnh test dư thừa
+test.jpg
